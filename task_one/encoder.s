@@ -3,7 +3,8 @@ buffer: resb 1       ; 1 byte buffer
 
 section .data
 newline: db 10       ; newline character
-
+outputfile: dd 1
+inputfile: dd 0
 section .text
 global main
 extern strlen
@@ -22,10 +23,38 @@ main:
     add esi, 4             ; skip argv[0]
 .argloop:
     mov eax, [esi]         ; pointer to current argv[i]
+    mov ebx, [eax]
+    mov ecx, [eax+1]
     push eax
     call strlen
     add esp, 4             ; clean stack
 
+    cmp ebx, '-'
+    je .proceed
+    jmp .continue
+    .proceed:
+        cmp ecx, 'o'
+        je .proceedIN
+        cmp ecx, 'i' 
+        je .proceedOUT
+        .proceedIN:
+            push eax               ; length
+            push dword [esi]       ; string pointer
+            push dword inputfile           ; fd = stdout
+            push dword 4           ; sys_write
+            call system_call
+            add esp, 16
+            jmp .continue
+        .proceedOUT:
+            push eax               ; length
+            push dword [esi]       ; string pointer
+            push dword outputfile           ; fd = stdout
+            push dword 4           ; sys_write
+            call system_call
+            add esp, 16
+            jmp .continue
+
+.continue:
     push eax               ; length
     push dword [esi]       ; string pointer
     push dword 1           ; fd = stdout
@@ -50,7 +79,7 @@ main:
     ; read 1 byte from stdin (fd = 0)
     push 1
     push buffer
-    push 0
+    push dword [inputfile]
     push 3          ; sys_read
     call system_call
     add esp, 16
@@ -65,7 +94,7 @@ main:
     ; write encoded byte
     push 1
     push buffer
-    push 1
+    push dword [outputfile]
     push 4          ; sys_write
     call system_call
     add esp, 16
