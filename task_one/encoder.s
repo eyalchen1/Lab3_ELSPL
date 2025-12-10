@@ -1,47 +1,72 @@
+section .bss
+buffer: resb 1       ; 1 byte buffer
+
+section .text
 global main
 extern system_call
-extern strlen
-newline: db 10       ; newline character
-section .text
+
 main:
     push ebp
     mov ebp, esp
 
-    mov eax, [ebp+8]       ; argc
-    mov ecx, eax           ; counter = argc
-    cmp ecx, 1
-    jle .done              ; if argc <= 1, exit (no argv[1..])
-
-    mov esi, [ebp+12]      ; argv pointer
-    add esi, 4             ; skip argv[0], start with argv[1]
-
-.loop:
-    mov eax, [esi]         ; pointer to current argv[i]
-    push eax
-    call strlen
-    add esp, 4
-
-    push eax               ; length
-    push dword [esi]       ; buffer pointer
-    push dword 1           ; stdout
-    push dword 4           ; sys_write
+.read_loop:
+    ; read 1 byte from stdin (fd=0)
+    push 1          ; length
+    push buffer     ; buffer pointer
+    push 0          ; fd = stdin
+    push 3          ; sys_read
     call system_call
     add esp, 16
+        cmp eax, 0      ; eax = number of bytes read
+    je .done        ; EOF, exit
 
-; write newline
-    push 1                 ; length = 1 byte
-    push newline           ; buffer pointer
-    push dword 1           ; stdout
-    push dword 4           ; sys_write
+    ; eax contains number of bytes read (1)
+    ; get the byte from buffer into eax
+    mov al, [buffer]
+    movzx eax, al       ; zero-extend to 32-bit
+    call encode         ; eax = encoded char
+
+    ; write the encoded char
+    mov [buffer], al
+    push 1
+    push buffer
+    push 1
+    push 4              ; sys_write
     call system_call
     add esp, 16
-
-    add esi, 4             ; move to next argv[i]
-    sub ecx, 1
-    cmp ecx, 1             ; have we printed all arguments?
-    jg .loop               ; if more, loop
+    jmp .read_loop      ; repeat
 
 .done:
-    mov eax, 0
+    mov eax, 1          ; sys_exit
+    xor ebx, ebx
+    int 0x80
+
+
+encode:
+    push ebp
+    mov ebp, esp
+
+    ; eax contains the character
+    mov al, al       ; ensure we're working with the lower byte (optional)
+
+    cmp al, 'A'
+    jb .not_letter      ; below 'A'
+    cmp al, 'Z'
+    jle .letter         ; uppercase letter
+
+    cmp al, 'a'
+    jb .not_letter      ; below 'a'
+    cmp al, 'z'
+    jle .letter         ; lowercase letter
+.not_letter:
+    ; do nothing
+    jmp .done
+
+.letter:
+    add al, 3           ; encode the letter
+
+.done:
     pop ebp
     ret
+
+
