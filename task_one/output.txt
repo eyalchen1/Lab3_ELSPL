@@ -1,0 +1,4 @@
+-ooutput.txt
+hey
+oro
+e|h
